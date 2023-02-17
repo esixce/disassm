@@ -22,7 +22,7 @@ GLOBAL_FF_INDEXES = ['inc    ', '', 'call   ', '', 'jmp    ', '', 'push   ', '']
 GLOBAL_OPCODE_MAP = {
 
     # duplicates
-    0x81: ['tbd', True, 'mi'],     # GLOBAL_81_INDEXES
+    0x81: ['tbd', True, 'mi'],     # GLOBAL_81_INDEXES # TODO PROBLEMS
     # 0x81: ['add ', True, 'mi'],   # /0
     # 0x81: ['xor ', True, 'mi'],   # /6
     # 0x81: ['cmp ', True, 'mi'],   # /7
@@ -34,9 +34,9 @@ GLOBAL_OPCODE_MAP = {
     # 0xFF: ['push ', True, 'm'],   # /6
 
     # add
-    0x05: ['add    eax, ', False, 'id'],
+    0x05: ['add    eax, ', False, 'id', 4],
     0x01: ['add    ', True, 'mr'],
-    0x03: ['add    ', True, 'rm'],
+    0x03: ['add    ', True, 'rm'],              # TODO PROBLEMS
 
     # sub
 
@@ -44,7 +44,7 @@ GLOBAL_OPCODE_MAP = {
     # or
 
     # xor
-    0x35: ['xor    ', False, 'id'],    # DOUBLE CHECK
+    0x35: ['xor    ', False, 'id', 4],         # DOUBLE CHECK
     0x31: ['xor    ', True, 'mr'],
     0x33: ['xor    ', True, 'rm'],
 
@@ -57,8 +57,8 @@ GLOBAL_OPCODE_MAP = {
     # ret
     0xC3: ['retn   ', False, 'zo'],
     0xCB: ['retf   ', False, 'zo'],
-    0xC2: ['retn   ', False, 'id'],
-    0xCA: ['retf   ', False, 'id'],
+    0xC2: ['retn   ', False, 'id', 2],
+    0xCA: ['retf   ', False, 'id', 2],
 
     # jmp
 
@@ -99,7 +99,7 @@ GLOBAL_OPCODE_MAP = {
     0x5F: ['pop    ', False, 'o', 0x58],
 
     # push
-    0x68: ['push   ', False, 'id'],
+    0x68: ['push   ', False, 'id', 4],
     # 50+rd push r32, False, 'o'
     0x57: ['push   ', False, 'o', 0x50],
     0x56: ['push   ', False, 'o', 0x50],
@@ -124,7 +124,7 @@ GLOBAL_OPCODE_MAP = {
     0x47: ['inc    ', False, 'o', 0x40],
 
     # cmp
-    0x3D: ['cmp    ', False, 'id'],
+    0x3D: ['cmp    ', False, 'id', 4],
     0x39: ['cmp    ', True, 'mr'],
     0x3B: ['cmp    ', True, 'rm'],
 
@@ -184,9 +184,14 @@ def parseMODRM(modrm):
     return mod, reg, rm
 
 def saveToFile(output):
-    f = open("output.txt", "w")
+    f = open("output.txt", "a")
     for addr in sorted(output):
         f.write('%s: %s' % (addr, output[addr]) + '\n')
+    f.close()
+
+def writeLineFile(output):
+    f = open("output.txt", "a")
+    f.write(output + '\n')
     f.close()
 
 def printDisassm(output):
@@ -224,6 +229,7 @@ def disassemble(b):
             if 1:                                       # TRUE
                 li = GLOBAL_OPCODE_MAP[opcode]
                 # print('Index -> %d' % i)
+                writeLineFile('Index -> %d' % i)
                 if li[1]:
                     # print('REQUIRES MODRM BYTE')
                     modrm = b[i]
@@ -281,11 +287,6 @@ def disassemble(b):
                         i += 1
 
                     elif mod == 0:
-                        # print('"%02x" % b[i-2] ' + str("%02x" % b[i-2]))
-                        # print('"%02x" % b[i-1] ' + str("%02x" % b[i-1]))
-                        # print('mod ' + str(mod))
-                        # print('reg ' + str(reg))
-                        # print('rm ' + str(rm))
                         if rm == 7:
                             # 'r/m32 operand is [reg]
                             implemented = True
@@ -309,12 +310,22 @@ def disassemble(b):
                             for y in range(4):
                                 disp += "%02x" % b[i]
                                 i += 1
-                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + '] WARNING'
+                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + ']' + '      ZWARNING'
 
                         elif rm == 4:
                             # Uncomment next line when you've implemented this
                             # implemented = True
-                            print('Indicates SIB byte required -> please implement')
+                            writeLineFile('Indicates SIB byte required -> please implement')
+
+                        elif rm == 3:
+                            # 'r/m32 operand is [reg]
+                            # TODO in validate
+                            writeLineFile('please implementZ')
+
+                        elif rm == 2:
+                            # 'r/m32 operand is [reg]
+                            # TODO in validate
+                            writeLineFile('please implementQ')
 
                         elif rm == 1:
                             # TODO in validate
@@ -338,7 +349,13 @@ def disassemble(b):
 
                         else:
                             # Uncomment next line when you've implemented this
-                            print('r/m32 operand is [reg] -> please implement')
+                            # print('r/m32 operand is [reg] -> please implement')
+                            writeLineFile('r/m32 operand is [reg] -> please implement')
+                            writeLineFile('"%02x" % b[i-2] ' + str("%02x" % b[i-2]))
+                            writeLineFile('"%02x" % b[i-1] ' + str("%02x" % b[i-1]))
+                            writeLineFile('mod ' + str(mod))
+                            writeLineFile('reg ' + str(reg))
+                            writeLineFile('rm ' + str(rm))
 
                     else:
                         print('ERROR')
@@ -372,10 +389,11 @@ def disassemble(b):
 
                     elif li[2] == 'id':
                         # print('Op Encoding id')
+                        # TODO PROBLEM
                         implemented = True
                         instruction += li[0]
                         immed = ''
-                        for y in range(2):
+                        for y in range(li[3]):
                             immed += "%02x" % b[i]
                             i += 1
                         instruction += '0x' + ''.join(reversed([immed[i:i+2] for i in range(0, len(immed), 2)]))
@@ -400,10 +418,11 @@ def disassemble(b):
                             immed += "%02x" % b[i]
                             i += 1
                         instruction += li[0] + 'offset_'
-                        instruction += ''.join(reversed([immed[i:i+2] for i in range(0, len(immed), 2)])) + 'h WARNING'
+                        instruction += ''.join(reversed([immed[i:i+2] for i in range(0, len(immed), 2)])) + 'h' + '     QWARNING'
 
                     else:
                         print('modify to complete the instruction and consume the appropriate bytes')
+                        writeLineFile('modify to complete the instruction and consume the appropriate bytes')
                         # print('li[2]' + li[2])
                         # modify to complete the instruction and
                         # consume the appropriate bytes
