@@ -14,11 +14,9 @@
 #
 ######################################################################
 
-GLOBAL_81_INDEXES = ['add    ', '', '', '', '', '', 'xor    ', 'cmp    ']
-GLOBAL_FF_INDEXES = ['inc    ', '', 'call   ', '', 'jmp    ', '', 'push   ', '']
-#
-# Key is the opcode
-# value is a list of useful information
+GLOBAL_REGISTER_NAMES = ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']
+
+# Key is the opcode - value is a list of useful information
 GLOBAL_OPCODE_MAP = {
 
     # duplicates
@@ -165,8 +163,9 @@ GLOBAL_OPCODE_MAP = {
 
 
 }
-
-GLOBAL_REGISTER_NAMES = ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']
+# Duplicate Opcodes
+GLOBAL_81_INDEXES = ['add    ', '', '', '', '', '', 'xor    ', 'cmp    ']
+GLOBAL_FF_INDEXES = ['inc    ', '', 'call   ', '', 'jmp    ', '', 'push   ', '']
 
 def isValidOpcode(opcode):
     if opcode in GLOBAL_OPCODE_MAP.keys():
@@ -206,6 +205,7 @@ def disassemble(b):
 
     # manage final output key is address
     outputList = {}
+    outputPrint = ''
 
     i = 0
 
@@ -225,161 +225,192 @@ def disassemble(b):
            break
 
         if isValidOpcode(opcode):
-            # print('Found valid opcode')
-            if 1:                                       # TRUE
-                li = GLOBAL_OPCODE_MAP[opcode]
-                # print('Index -> %d' % i)
-                writeLineFile('Index -> %d' % i)
-                if li[1]:
-                    # print('REQUIRES MODRM BYTE')
-                    modrm = b[i]
-                    instruction_bytes += ' '
-                    instruction_bytes += "%02x" % b[i]
+            outputPrint += 'Index -> %d' % i + ' 0x' + '%02x' % (i-1) + '\n'
+            outputPrint += 'Found valid opcode ' + instruction_bytes + ' ' + GLOBAL_OPCODE_MAP[opcode][0] + '\n'
+            outputPrint += 'opcode[2] ' + GLOBAL_OPCODE_MAP[opcode][2] + '\n'
 
-                    i += 1      # we've consumed it now
+            if 1:                                       # TRUE # TODO Check size
+                li = GLOBAL_OPCODE_MAP[opcode]
+                if li[1]:
+                    outputPrint += 'REQUIRES MODRM BYTE' + '\n'
+
+                    modrm = b[i]
                     mod, reg, rm = parseMODRM(modrm)
 
+                    if li[0] != 'tbd':
+                        instruction += li[0]
+                    else:
+                        if instruction_bytes == '81':
+                            instruction += GLOBAL_81_INDEXES[reg]
+                        elif instruction_bytes == 'FF':
+                            instruction += GLOBAL_FF_INDEXES[reg]
+
+                    instruction_bytes += ' '
+                    instruction_bytes += "%02x" % b[i]
+                    i += 1      # we've consumed it now
+
+                    if rm == 4 and b[i] == 0x24:  # TODO  skipped byte on ESI???? b[i] == 0x24
+                        i += 1
+
+                    outputPrint += 'mod ' + str(mod) + '\n'
+                    outputPrint += 'reg ' + str(reg) + '\n'
+                    outputPrint += 'rm ' + str(rm) + '\n'
+
+                    # MOD 0 - 3 SWITCH
                     if mod == 3:
+                        # 'r/m32 operand is direct register'
                         implemented = True
-                        # print('r/m32 operand is direct register')
-                        # print('li[2] ' + li[2])
+
+                        # R/M SWITCH
                         if li[2] == 'mr':
-                            instruction += li[0]
                             instruction += GLOBAL_REGISTER_NAMES[rm]
                             instruction += ', '
                             instruction += GLOBAL_REGISTER_NAMES[reg]
+
                         elif li[2] == 'rm':
-                            instruction += li[0]
                             instruction += GLOBAL_REGISTER_NAMES[reg]
                             instruction += ', '
                             instruction += GLOBAL_REGISTER_NAMES[rm]
+
                         elif li[2] == 'mi':
-                            # print(reg)
-                            # TODO
+                            # TODO in validate
                             disp = ''
                             for y in range(4):
                                 disp += "%02x" % b[i]
                                 i += 1
-                            instruction += GLOBAL_81_INDEXES[reg] + GLOBAL_REGISTER_NAMES[rm] + ', [0x'
-                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + ']'
+                            instruction += GLOBAL_REGISTER_NAMES[rm] + ', 0x'
+                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)]))
 
                     elif mod == 2:
                         implemented = True
                         # 'r/m32 operand is [ reg + disp32 ]
-
-                        instruction += li[0] + GLOBAL_REGISTER_NAMES[reg]
-                        # will need to parse the displacement32
+                        instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + ' + 0x'
                         disp = ''
                         for y in range(4):
                             disp += "%02x" % b[i]
                             i += 1
-                        instruction += ', [ebp + 0x'
-                        instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + ']'
+                        instruction += ''.join(reversed([disp[i:i + 2] for i in range(0, len(disp), 2)])) + ']'
 
-                    elif mod == 1:
-                        # Uncomment next line when you've implemented this
-                        implemented = True
-                        # 'r/m32 operand is [ reg + disp8 ]
-
-                        instruction += li[0] + GLOBAL_REGISTER_NAMES[reg]
-                        # will need to parse the displacement8
-                        instruction += ', [ebp + 0x' + "%02x" % b[i] + ']'
-                        i += 1
-
-                    elif mod == 0:
-                        if rm == 7:
-                            # 'r/m32 operand is [reg]
-                            implemented = True
-                            instruction += li[0] + '['
-                            instruction += GLOBAL_REGISTER_NAMES[rm] + '], '
-                            instruction += GLOBAL_REGISTER_NAMES[reg]
-                            # TODO in progress
-
-                        elif rm == 6:
-                            # 'r/m32 operand is [reg]
-                            implemented = True
-                            instruction += li[0]
-                            instruction += GLOBAL_REGISTER_NAMES[reg] + ', ['
-                            instruction += GLOBAL_REGISTER_NAMES[rm] + ']'
-
-                        elif rm == 5:
-                            # print('r/m32 operand is [disp32]
-                            implemented = True
-                            instruction += li[0] + GLOBAL_REGISTER_NAMES[reg] + ', [0x'
+                        # R/M SWITCH
+                        if li[2] == 'mr':
+                            outputPrint += 'Implement' + '\n'
+                        elif li[2] == 'rm':
+                            outputPrint += 'Implement' + '\n'
+                        elif li[2] == 'mi':
                             disp = ''
                             for y in range(4):
                                 disp += "%02x" % b[i]
                                 i += 1
-                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + ']' + '      ZWARNING'
-
-                        elif rm == 4:
-                            # Uncomment next line when you've implemented this
-                            # implemented = True
-                            writeLineFile('Indicates SIB byte required -> please implement')
-
-                        elif rm == 3:
-                            # 'r/m32 operand is [reg]
-                            # TODO in validate
-                            writeLineFile('please implementZ')
-
-                        elif rm == 2:
-                            # 'r/m32 operand is [reg]
-                            # TODO in validate
-                            writeLineFile('please implementQ')
-
-                        elif rm == 1:
-                            # TODO in validate
-                            # 'r/m32 operand is [reg]
-                            implemented = True
-                            if li[0] != 'tbd':
-                                instruction += li[0]
-                                instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + '], '
-                                instruction += GLOBAL_REGISTER_NAMES[reg]
-
-                            else:
-                                instruction += GLOBAL_FF_INDEXES[reg]
-                                instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + ']'
-
-                        elif rm == 0:
-                            # 'r/m32 operand is [reg]
-                            implemented = True
-                            instruction += li[0] + '['
-                            instruction += GLOBAL_REGISTER_NAMES[rm] + '], '
-                            instruction += GLOBAL_REGISTER_NAMES[reg]
+                            instruction += ', 0x' + ''.join(reversed([disp[i:i + 2] for i in range(0, len(disp), 2)]))
 
                         else:
-                            # Uncomment next line when you've implemented this
-                            # print('r/m32 operand is [reg] -> please implement')
-                            writeLineFile('r/m32 operand is [reg] -> please implement')
-                            writeLineFile('"%02x" % b[i-2] ' + str("%02x" % b[i-2]))
-                            writeLineFile('"%02x" % b[i-1] ' + str("%02x" % b[i-1]))
-                            writeLineFile('mod ' + str(mod))
-                            writeLineFile('reg ' + str(reg))
-                            writeLineFile('rm ' + str(rm))
+                            # TODO DELETE
+                            instruction += GLOBAL_REGISTER_NAMES[reg]
+                            # will need to parse the displacement32
+                            disp = ''
+                            for y in range(4):
+                                disp += "%02x" % b[i]
+                                i += 1
+                            instruction += ', [ebp + 0x'
+                            instruction += ''.join(reversed([disp[i:i + 2] for i in range(0, len(disp), 2)])) + ']'
+
+                    elif mod == 1:
+                        implemented = True
+                        # 'r/m32 operand is [ reg + disp8 ]
+
+                        if li[2] == 'mr':
+                            outputPrint += 'Implement\n'
+                        elif li[2] == 'rm':
+                            instruction += GLOBAL_REGISTER_NAMES[reg]
+                            instruction += ', [' + GLOBAL_REGISTER_NAMES[rm] + ']'
+
+                            if rm == 5 and b[i] == 0x00:  # TODO  skipped byte on EBP???? b[i] == 0x00
+                                i += 1
+
+                            # instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + '], '
+                            # instruction += GLOBAL_REGISTER_NAMES[reg]
+                        elif li[2] == 'mi':
+                            instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + ' + 0x'
+                            instruction += "%02x" % b[i] + '], '    # TODO in validation
+                            i += 1
+                            size = 4
+                            disp = ''
+                            for y in range(size):
+                                disp += "%02x" % b[i]
+                                i += 1
+                            instruction += '0x' + ''.join(reversed([disp[i:i + 2] for i in range(0, len(disp), 2)]))
+
+                        else:
+                            outputPrint += 'Implement\n'
+
+                    elif mod == 0:
+
+                        #  Mod 0 Special case SWITCH
+                        if rm == 5:         # R/M bits = 101
+                            outputPrint += 'rm ' + str(rm) + ' therefore, special case\n'
+                            # 'r/m32 operand is [disp32]
+                            implemented = True
+
+                            instruction += GLOBAL_REGISTER_NAMES[reg] + ', [0x'
+
+                            disp = ''
+                            for y in range(4):
+                                disp += "%02x" % b[i]
+                                i += 1
+                            instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)])) + ']'
+
+                            # R/M SWITCH
+                            if li[2] == 'mi':
+                                instruction += ', 0x'
+                                disp = ''
+                                for y in range(4):
+                                    disp += "%02x" % b[i]
+                                    i += 1
+                                instruction += ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)]))
+
+                                # TODO check all i += 1 locations
+                        else:
+                            outputPrint += 'rm ' + str(rm) + ' therefore, NOT special case\n'
+                            # 'r/m32 operand is [reg]
+                            implemented = True
+
+                            # R/M SWITCH
+                            if li[2] == 'rm':
+                                instruction += GLOBAL_REGISTER_NAMES[reg]
+                                instruction += ', [' + GLOBAL_REGISTER_NAMES[rm] + ']'
+                            elif li[2] == 'mr':
+                                outputPrint += 'implement' + '\n'
+                            elif li[2] == 'mi':
+                                instruction += '[' + GLOBAL_REGISTER_NAMES[rm] + ']'
+                                disp = ''
+                                # if b[i] == 0x24 or b[i] == 0x00:       # TODO  skipped byte????
+                                #    i += 1
+                                for y in range(4):
+                                    disp += "%02x" % b[i]
+                                    i += 1
+                                instruction += ', 0x' + ''.join(reversed([disp[i:i+2] for i in range(0, len(disp), 2)]))
+
+
+
+                        # TODO TAKEN CODE
 
                     else:
-                        print('ERROR')
+                        outputPrint += 'ERROR' + '\n'
 
-                    if implemented:
-                        # print('Adding to list ' + instruction)
-                        outputList["%08X" % orig_index] = instruction_bytes + '         ' + instruction
-                    else:
-                        outputList["%08X" % orig_index] = 'db %02x' % (int(opcode) & 0xff)
                 else:
-                    # print('Does not require MODRM')
+                    outputPrint += 'Does not require MODRM' + '\n'
+                    instruction += li[0]
 
                     if li[2] == 'o':
                         # print('Op Encoding O')
                         implemented = True
                         displace = li[3]
-                        instruction += li[0]
                         instruction += GLOBAL_REGISTER_NAMES[int(hex(int(instruction_bytes, 16) - displace), 16)]
 
                     elif li[2] == 'oi':
                         # print('Op Encoding oi')
                         implemented = True
                         displace = li[3]
-                        instruction += li[0]
                         instruction += GLOBAL_REGISTER_NAMES[int(hex(int(instruction_bytes, 16) - displace), 16)]
                         immed = ''
                         for y in range(4):
@@ -391,7 +422,6 @@ def disassemble(b):
                         # print('Op Encoding id')
                         # TODO PROBLEM
                         implemented = True
-                        instruction += li[0]
                         immed = ''
                         for y in range(li[3]):
                             immed += "%02x" % b[i]
@@ -402,7 +432,6 @@ def disassemble(b):
                         # print('Op Encoding zo')
                         # TODO in progress
                         implemented = True
-                        instruction += li[0]
 
                     elif li[2] == 'd':
                         # print('Op Encoding d')
@@ -417,21 +446,19 @@ def disassemble(b):
                         for y in range(li[3]):
                             immed += "%02x" % b[i]
                             i += 1
-                        instruction += li[0] + 'offset_'
+                        instruction += 'offset_'
                         instruction += ''.join(reversed([immed[i:i+2] for i in range(0, len(immed), 2)])) + 'h' + '     QWARNING'
 
-                    else:
-                        print('modify to complete the instruction and consume the appropriate bytes')
-                        writeLineFile('modify to complete the instruction and consume the appropriate bytes')
-                        # print('li[2]' + li[2])
-                        # modify to complete the instruction and
-                        # consume the appropriate bytes
+                        # TODO jz op 74 near =
 
-                    if implemented:
-                        # print('Adding to list ' + instruction)
-                        outputList["%08X" % orig_index] = instruction_bytes + '            ' + instruction
                     else:
-                        outputList["%08X" % orig_index] = 'db %02x' % (int(opcode) & 0xff)
+                        outputPrint += 'modify to complete the instruction and consume the appropriate bytes'  + '\n'
+
+                if implemented:
+                    outputPrint += 'Adding to list ' + instruction + '\n'
+                    outputList["%08X" % orig_index] = instruction_bytes + '            ' + instruction
+                else:
+                    outputList["%08X" % orig_index] = 'db %02x' % (int(opcode) & 0xff)
 
             # except:
             else:
@@ -445,8 +472,9 @@ def disassemble(b):
         if i > len(b):
             break
 
-    printDisassm(outputList)
+    writeLineFile(outputPrint)
     saveToFile(outputList)
+    printDisassm(outputList)
 
 def getfile(filename):	
     with open(filename, 'rb') as f:
