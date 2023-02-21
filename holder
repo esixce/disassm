@@ -1,0 +1,16 @@
+                            if scale == 0:
+                                # [ indexreg*1 + basereg ]
+                                if base == 5: # and mod == 0
+                                    # [ indexreg*1 + displacement ]
+                            elif scale == 1:
+                                # [ indexreg*2 + basereg + displacement ]
+                                if base == 5: # and mod == 0
+                                    # [ indexreg*2 + displacement ]
+                            elif scale == 2:
+                                # [indexreg * 4 + basereg + displacement]
+                                if base == 5: # and mod == 0
+                                    # [indexreg * 4 + displacement]
+                            elif scale == 3:
+                                # [indexreg * 8 + basereg + displacement]
+                                if base == 5: # and mod == 0
+                                    #[indexreg * 8 + displacement]
